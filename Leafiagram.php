@@ -1,6 +1,7 @@
 <?php
 
 class Leafiagram {
+
 	public $username;
 	public $password;
 	public $sigKey;
@@ -10,6 +11,7 @@ class Leafiagram {
 	public $device_id;
 	public $token;
 	public $username_id;
+    public $rank_token;
 
 	public function __construct($username, $password)
   	{
@@ -21,6 +23,7 @@ class Leafiagram {
       $this->userAgent = "Instagram 8.5.1 Android (18/4.3; 320dpi; 720x1280; Fly; IQ4410i; Phoenix 2; qcom; en_US)";
       $this->guid = $this->make_guid(true);
       $this->device_id = "android-".$this->guid;
+
 
 
   	}
@@ -38,17 +41,20 @@ class Leafiagram {
       				"device_id"=> $this->device_id,
       				"Content-Type" => "application/x-www-form-urlencoded; charset=UTF-8"
       				));
-      $header = $this->make_header($login_data);
-      $res = $this->sendReq('accounts/login/',$header);
-
+      $res = $this->sendReq('accounts/login/',$login_data);
 
       preg_match('#Set-Cookie: csrftoken=([^;]+)#', $res[0], $match_res);
       $this->token = $match_res[1];
       $this->username_id = $res[1]["logged_in_user"]["pk"];
+      $this->rank_token = $this->username_id."_".$this->guid;
 
       return $res;
 	}
 
+    /*
+    // like
+    //      API
+    */
 	public function addLike($media_id){
 		$data = json_encode([
         		"_uuid"      => $this->guid,
@@ -57,10 +63,42 @@ class Leafiagram {
         		"media_id"   => $media_id
     	]);
 
-    	return $this->sendReq("media/{$media_id}/like/", $this->make_header($data));
+        return $this->sendReq("media/{$media_id}/like/", $data)[1];
 	}
 
-	public function sendReq($url,$postdata){
+    /*
+    // getPost
+    //      API
+    */
+    public function feed(){
+        return $this->sendReq("feed/timeline/")[1];
+    }
+
+    public function home(){
+        return $this->sendReq("feed/timeline/?rank_token=$this->rank_token&ranked_content=true&max_id=100")[1];
+    }
+
+    public function tagsearch($word){
+        return $this->sendReq("feed/tag/$word/?rank_token=$this->rank_token&ranked_content=true")[1];
+    }
+
+    /*
+    // Folllow
+    //      API
+    */
+    public function getFollower($username_id) {
+        return $this->sendReq("friendships/$username_id/followers/?ig_sig_key_version=4&rank_token=$this->rank_token")[1];
+    }
+
+    public function getFollowing($username_id) {
+        return $this->sendReq("friendships/$username_id/following/?ig_sig_key_version=4&rank_token=$this->rank_token")[1];
+    }
+
+
+
+	public function sendReq($url,$postdata = null){
+    $req_header = $this->make_header($postdata);
+
 		$headers = [
         	'Connection: close',
         	'Accept: */*',
@@ -84,7 +122,7 @@ class Leafiagram {
         curl_setopt($ch, CURLOPT_COOKIEJAR,$this->username.'-cookies.text');
 		if($postdata){
 			curl_setopt($ch, CURLOPT_POST, true);
-			curl_setopt($ch, CURLOPT_POSTFIELDS, $postdata);
+			curl_setopt($ch, CURLOPT_POSTFIELDS, $req_header);
 		}
 		
 		$res = curl_exec($ch);
@@ -93,7 +131,7 @@ class Leafiagram {
         $body = substr($res, $header_len);
 
         curl_close($ch);
-        return [$header, json_decode($body, true)];
+        return [$header,json_decode($body, true)];
 	}
 
 
